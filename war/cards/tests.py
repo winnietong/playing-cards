@@ -2,7 +2,7 @@ from django.core.exceptions import ValidationError
 from django.core.urlresolvers import reverse
 from django.http import HttpResponseRedirect
 from django.test import TestCase
-from models import Card, Player
+from models import Card, Player, WarGame
 from utils import create_deck
 from forms import EmailUserCreationForm
 from test_utils import run_pep8_for_package, run_pyflakes_for_package
@@ -81,6 +81,9 @@ class ViewTestCase(TestCase):
     def setUp(self):
         create_deck()
 
+    def create_war_game(self, user, result=WarGame.LOSS):
+        WarGame.objects.create(result=result, player=user)
+
     def test_home_page(self):
         response = self.client.get(reverse('home'))
         self.assertIn('<p>Suit: spade, Rank: two</p>', response.content)
@@ -127,6 +130,21 @@ class ViewTestCase(TestCase):
         # Check it's a redirect to the profile page
         self.assertIsInstance(response, HttpResponseRedirect)
         self.assertTrue(response.get('location').endswith(reverse('profile')))
+
+    def test_profile_page(self):
+        # Create user and log them in
+        password = 'passsword'
+        user = Player.objects.create_user(username='test-user', email='test@test.com', password=password)
+        self.client.login(username=user.username, password=password)
+
+        # Set up some war game entries
+        self.create_war_game(user)
+        self.create_war_game(user, WarGame.WIN)
+
+        # Make the url call and check the html and games queryset length
+        response = self.client.get(reverse('profile'))
+        self.assertInHTML('<p>Your email address is {}</p>'.format(user.email), response.content)
+        self.assertEqual(len(response.context['games']), 2)
 
 
 class SyntaxTest(TestCase):
